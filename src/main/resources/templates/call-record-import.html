@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通话记录与录音导入</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background:#f5f7fb; margin:0; }
+        .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+        .card { background:#fff; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.06); padding:24px; margin-bottom:16px; }
+        h1 { margin:0 0 12px 0; font-size:28px; }
+        h3 { margin:0 0 12px 0; }
+        .muted { color:#6b7280; line-height:1.8; }
+        .btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; border:none; border-radius:10px; cursor:pointer; font-weight:600; text-decoration:none; }
+        .btn-primary { background:#2563eb; color:#fff; }
+        .btn-secondary { background:#eef2ff; color:#1e3a8a; }
+        .btn:disabled { opacity:.6; cursor:not-allowed; }
+        .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+        input[type=file] { padding:12px; border:1px solid #d1d5db; border-radius:10px; background:#fff; min-width:320px; }
+        .tip-list { margin: 8px 0 0 20px; color:#4b5563; }
+        .result { white-space:pre-wrap; background:#0f172a; color:#e5e7eb; border-radius:12px; padding:16px; min-height:120px; overflow:auto; }
+        .ok { color:#10b981; }
+        .bad { color:#ef4444; }
+        .warn { color:#d97706; }
+        code { background:#f3f4f6; padding:2px 6px; border-radius:6px; color:#111827; }
+        .split { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+        @media (max-width: 768px) { .split { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="card">
+        <h1>通话记录与录音导入</h1>
+        <div class="muted">
+            这个页面同时支持两种导入：<strong>通话记录表格导入</strong> 和 <strong>录音 ZIP 导入</strong>。<br>
+            录音 ZIP 导入后，系统会把音频文件自动解压到 <code>temp/audio</code>，并优先按 <code>recordingFileName</code> / <code>callId</code> 自动匹配通话记录。
+        </div>
+        <ul class="tip-list">
+            <li>表格支持：<strong>.xlsx</strong>、<strong>.xls</strong>、<strong>.csv</strong></li>
+            <li>录音压缩包支持：<strong>.zip</strong>，内部建议放置标准命名录音，例如 <code>20260001_13543010534_20260326170407.wav</code></li>
+            <li>录音导入后会统一落到 <code>temp/audio</code>，后续转写会直接优先从该目录读取</li>
+        </ul>
+    </div>
+
+    <div class="split">
+        <div class="card">
+            <h3>一、导入通话记录表格</h3>
+            <div class="row" style="margin-bottom: 12px;">
+                <a class="btn btn-secondary" href="/api/v1/calls/import/template" target="_blank">下载导入模板</a>
+            </div>
+            <div class="row">
+                <input id="tableFileInput" type="file" accept=".xlsx,.xls,.csv">
+                <button id="tableUploadBtn" class="btn btn-primary">开始导入表格</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>二、导入录音 ZIP</h3>
+            <div class="muted" style="margin-bottom: 12px;">
+                上传后自动解压到 <code>temp/audio</code>，并尽量自动匹配通话记录。
+            </div>
+            <div class="row">
+                <input id="zipFileInput" type="file" accept=".zip">
+                <button id="zipUploadBtn" class="btn btn-primary">开始导入录音 ZIP</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top:0;">执行结果</h3>
+        <div id="summary" class="muted">尚未开始导入。</div>
+        <div id="result" class="result">等待导入...</div>
+    </div>
+</div>
+<script>
+    const summary = document.getElementById('summary');
+    const result = document.getElementById('result');
+
+    document.getElementById('tableUploadBtn').addEventListener('click', async () => {
+        const file = document.getElementById('tableFileInput').files[0];
+        if (!file) { alert('请先选择 Excel / CSV 文件'); return; }
+        await uploadFile('/api/v1/calls/import/file', file, '表格导入完成', '通话记录表格');
+    });
+
+    document.getElementById('zipUploadBtn').addEventListener('click', async () => {
+        const file = document.getElementById('zipFileInput').files[0];
+        if (!file) { alert('请先选择 ZIP 文件'); return; }
+        await uploadFile('/api/v1/calls/recordings/import/zip', file, '录音 ZIP 导入完成', '录音 ZIP');
+    });
+
+    async function uploadFile(url, file, doneText, label) {
+        const formData = new FormData();
+        formData.append('file', file);
+        summary.textContent = `${label} 上传中，请稍候...`;
+        result.textContent = '处理中...';
+        try {
+            const response = await fetch(url, { method: 'POST', body: formData });
+            const data = await response.json();
+            const code = data && typeof data.code !== 'undefined' ? Number(data.code) : null;
+            const success = response.ok && (code === 0 || code === 200 || data.success === true);
+            if (!success) {
+                throw new Error((data && data.message) || `${label}失败`);
+            }
+            summary.innerHTML = `<span class="ok" style="font-weight:600;">${doneText}</span>`;
+            result.textContent = JSON.stringify(data.data || {}, null, 2);
+        } catch (error) {
+            summary.innerHTML = `<span class="bad">${label}失败</span>`;
+            result.textContent = error.message || '未知错误';
+        }
+    }
+</script>
+</body>
+</html>

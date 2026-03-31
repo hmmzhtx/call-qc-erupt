@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通话记录增强列表</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f5f7fb; color: #1f2937; }
+        .page { padding: 16px; }
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 16px; margin-bottom: 16px; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+        .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+        .field label { font-size: 12px; color: #6b7280; }
+        .field input, .field select { height: 36px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 8px; }
+        .btn { height: 36px; padding: 0 14px; border: none; border-radius: 8px; cursor: pointer; }
+        .btn-primary { background: #2563eb; color: #fff; }
+        .btn-secondary { background: #e5e7eb; color: #111827; }
+        .btn-link { background: transparent; color: #2563eb; padding: 0; height: auto; }
+        .top-scroll { overflow-x: auto; overflow-y: hidden; height: 16px; position: sticky; top: 0; background: #f5f7fb; z-index: 20; }
+        .top-scroll-inner { height: 1px; }
+        .table-wrap { overflow: auto; max-height: calc(100vh - 270px); border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; }
+        table { border-collapse: collapse; min-width: 2400px; width: max-content; }
+        th, td { border-bottom: 1px solid #e5e7eb; padding: 10px 12px; font-size: 13px; vertical-align: top; white-space: nowrap; }
+        th { position: sticky; top: 0; background: #f9fafb; z-index: 5; }
+        td.wrap, th.wrap { white-space: normal; min-width: 240px; max-width: 320px; word-break: break-all; }
+        td.small { color: #6b7280; }
+        .ops { display: flex; gap: 8px; align-items: center; }
+        .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; gap: 12px; flex-wrap: wrap; }
+        .status { color: #6b7280; font-size: 12px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="card">
+        <h2 style="margin:0 0 12px 0;">通话记录增强列表</h2>
+        <div class="toolbar">
+            <div class="field"><label>通话ID</label><input id="callId"></div>
+            <div class="field"><label>主叫号码</label><input id="callerNumber"></div>
+            <div class="field"><label>客户号码</label><input id="customerPhone"></div>
+            <div class="field"><label>客户姓名</label><input id="customerName"></div>
+            <div class="field"><label>坐席姓名</label><input id="agentName"></div>
+            <div class="field"><label>坐席工号</label><input id="agentId"></div>
+            <div class="field"><label>业务线</label><input id="businessLine"></div>
+            <div class="field"><label>项目名称</label><input id="projectName"></div>
+            <div class="field"><label>任务名称</label><input id="taskName"></div>
+            <div class="field"><label>处理状态</label><input id="processStatus"></div>
+            <div class="field"><label>每页条数</label>
+                <select id="pageSize"><option>50</option><option>100</option><option selected>500</option></select>
+            </div>
+            <button class="btn btn-primary" id="btnSearch">查询</button>
+            <button class="btn btn-secondary" id="btnReset">重置</button>
+            <button class="btn btn-secondary" id="btnBatchAsync">批量异步转写</button>
+            <button class="btn btn-secondary" onclick="window.open('/pages/call-record-import','_blank')">导入页</button>
+            <button class="btn btn-secondary" onclick="window.location.href='/erupt'">返回 Erupt</button>
+        </div>
+        <div class="status" style="margin-top:10px;">说明：该增强列表页专门解决原生 Erupt 表格在单页 500 条时底部横向拖动条不易看到的问题，顶部会固定显示同步横向滚动条。</div>
+    </div>
+
+    <div class="card" style="padding-top:8px;">
+        <div class="top-scroll" id="topScroll"><div class="top-scroll-inner" id="topScrollInner"></div></div>
+        <div class="table-wrap" id="tableWrap">
+            <table id="table">
+                <thead>
+                <tr>
+                    <th><input type="checkbox" id="checkAll"></th><th>通话ID</th><th>主叫号码</th><th>客户号码</th><th>客户姓名</th><th>坐席姓名</th><th>坐席工号</th><th>项目名称</th><th>任务名称</th><th>业务线</th><th>技能组</th><th>通话类型</th><th>开始时间</th><th>结束时间</th><th>通话时长(秒)</th><th>录音文件名</th><th class="wrap">录音地址</th><th>客户ID</th><th>处理状态</th><th class="wrap">处理说明</th><th>最近处理时间</th><th>转写分段数</th><th>操作</th>
+                </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+        <div class="pager">
+            <div id="pageInfo" class="status">加载中...</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button class="btn btn-secondary" id="btnPrev">上一页</button>
+                <button class="btn btn-secondary" id="btnNext">下一页</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const state = { pageNo: 1, pageSize: 500, total: 0 };
+    const topScroll = document.getElementById('topScroll');
+    const topScrollInner = document.getElementById('topScrollInner');
+    const tableWrap = document.getElementById('tableWrap');
+    const tbody = document.getElementById('tbody');
+    const pageInfo = document.getElementById('pageInfo');
+
+    function syncTopScrollWidth() {
+        topScrollInner.style.width = document.getElementById('table').offsetWidth + 'px';
+    }
+    topScroll.addEventListener('scroll', () => { tableWrap.scrollLeft = topScroll.scrollLeft; });
+    tableWrap.addEventListener('scroll', () => { topScroll.scrollLeft = tableWrap.scrollLeft; });
+    window.addEventListener('resize', syncTopScrollWidth);
+
+    function esc(v) {
+        if (v === null || v === undefined) return '';
+        return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function currentQuery() {
+        return {
+            pageNo: state.pageNo,
+            pageSize: Number(document.getElementById('pageSize').value || 500),
+            callId: document.getElementById('callId').value.trim(),
+            callerNumber: document.getElementById('callerNumber').value.trim(),
+            customerPhone: document.getElementById('customerPhone').value.trim(),
+            customerName: document.getElementById('customerName').value.trim(),
+            agentName: document.getElementById('agentName').value.trim(),
+            agentId: document.getElementById('agentId').value.trim(),
+            businessLine: document.getElementById('businessLine').value.trim(),
+            projectName: document.getElementById('projectName').value.trim(),
+            taskName: document.getElementById('taskName').value.trim(),
+            processStatus: document.getElementById('processStatus').value.trim()
+        };
+    }
+
+    async function loadPage() {
+        const query = currentQuery();
+        state.pageSize = query.pageSize;
+        const params = new URLSearchParams();
+        Object.keys(query).forEach(k => { if (query[k]) params.append(k, query[k]); });
+        const res = await fetch('/api/v1/call-records/page?' + params.toString());
+        const json = await res.json();
+        if (json.code !== 0) { alert(json.message || '加载列表失败'); return; }
+        const page = json.data;
+        state.total = page.total;
+        renderRows(page.records || []);
+        const totalPages = Math.max(Math.ceil((page.total || 0) / state.pageSize), 1);
+        pageInfo.textContent = `第 ${state.pageNo} / ${totalPages} 页，共 ${page.total || 0} 条，当前每页 ${state.pageSize} 条。顶部横向拖动条固定可见，可勾选多条后批量异步转写。`;
+        document.getElementById('btnPrev').disabled = state.pageNo <= 1;
+        document.getElementById('btnNext').disabled = state.pageNo >= totalPages;
+        syncTopScrollWidth();
+    }
+
+    function renderRows(rows) {
+        document.getElementById('checkAll').checked = false;
+        tbody.innerHTML = rows.map(row => `
+            <tr>
+                <td><input type="checkbox" class="row-check" value="${esc(row.callId)}"></td><td>${esc(row.callId)}</td>
+                <td>${esc(row.callerNumber)}</td>
+                <td>${esc(row.customerPhone)}</td>
+                <td>${esc(row.customerName)}</td>
+                <td>${esc(row.agentName)}</td>
+                <td>${esc(row.agentId)}</td>
+                <td>${esc(row.projectName)}</td>
+                <td>${esc(row.taskName)}</td>
+                <td>${esc(row.businessLine)}</td>
+                <td>${esc(row.skillGroup)}</td>
+                <td>${esc(row.callType)}</td>
+                <td>${esc(row.startTime)}</td>
+                <td>${esc(row.endTime)}</td>
+                <td>${esc(row.durationSeconds)}</td>
+                <td>${esc(row.recordingFileName)}</td>
+                <td class="wrap">${esc(row.recordingUrl)}</td>
+                <td>${esc(row.customerId)}</td>
+                <td>${esc(row.processStatus)}</td>
+                <td class="wrap">${esc(row.processMessage)}</td>
+                <td>${esc(row.lastProcessTime)}</td>
+                <td>${esc(row.transcriptSegmentCount)}</td>
+                <td>
+                    <div class="ops">
+                        <button class="btn btn-link" onclick="submitAsync('${esc(row.callId)}')">异步转写</button>
+                        <button class="btn btn-link" onclick="window.open('/pages/qc-detail/${esc(row.callId)}','_blank')">质检详情</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function checkedCallIds() {
+        return Array.from(document.querySelectorAll('.row-check:checked')).map(item => item.value).filter(Boolean);
+    }
+
+    function markRowPending(callId, message) {
+        const checkbox = document.querySelector(`.row-check[value="${CSS.escape(callId)}"]`);
+        if (!checkbox) return;
+        const tr = checkbox.closest('tr');
+        if (!tr) return;
+        const tds = tr.querySelectorAll('td');
+        if (tds.length >= 20) {
+            tds[18].textContent = 'TRANSCRIBE_PENDING';
+            tds[19].textContent = message || '已手动提交异步转写';
+        }
+    }
+
+    async function submitAsync(callId) {
+        const res = await fetch(`/api/v1/calls/${encodeURIComponent(callId)}/transcribe/async`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code !== 0) {
+            alert(json.message || '提交异步转写失败');
+            return;
+        }
+        markRowPending(callId, json.message || '已手动提交异步转写');
+        alert(json.message || '已提交异步转写');
+    }
+
+    async function batchSubmitAsync() {
+        const callIds = checkedCallIds();
+        if (!callIds.length) {
+            alert('请至少勾选一条通话记录');
+            return;
+        }
+        const res = await fetch('/api/v1/calls/transcribe/async/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(callIds)
+        });
+        const json = await res.json();
+        if (json.code !== 0) {
+            alert(json.message || '批量提交异步转写失败');
+            return;
+        }
+        const data = json.data || {};
+        (data.successCallIds || []).forEach(callId => markRowPending(callId, '已批量提交异步转写'));
+        let detail = json.message || '批量提交完成';
+        if (data.skippedMessages && data.skippedMessages.length) {
+            detail += '\\n\\n以下记录因已转写完成而自动跳过：\\n' + data.skippedMessages.join('\\n');
+        }
+        if (data.failedMessages && data.failedMessages.length) {
+            detail += '\\n\\n以下记录提交失败：\\n' + data.failedMessages.join('\\n');
+        }
+        alert(detail);
+    }
+
+    window.submitAsync = submitAsync;
+
+    document.getElementById('btnSearch').addEventListener('click', () => { state.pageNo = 1; loadPage(); });
+    document.getElementById('btnReset').addEventListener('click', () => {
+        ['callId','callerNumber','customerPhone','customerName','agentName','agentId','businessLine','projectName','taskName','processStatus'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('pageSize').value = '500';
+        state.pageNo = 1;
+        loadPage();
+    });
+    document.getElementById('btnBatchAsync').addEventListener('click', batchSubmitAsync);
+    document.getElementById('checkAll').addEventListener('change', (e) => {
+        document.querySelectorAll('.row-check').forEach(item => item.checked = e.target.checked);
+    });
+    tbody.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('row-check')) return;
+        const rows = Array.from(document.querySelectorAll('.row-check'));
+        const checked = rows.filter(item => item.checked);
+        document.getElementById('checkAll').checked = rows.length > 0 && checked.length === rows.length;
+    });
+    document.getElementById('pageSize').addEventListener('change', () => { state.pageNo = 1; loadPage(); });
+    document.getElementById('btnPrev').addEventListener('click', () => { if (state.pageNo > 1) { state.pageNo--; loadPage(); } });
+    document.getElementById('btnNext').addEventListener('click', () => { const totalPages = Math.max(Math.ceil((state.total || 0) / state.pageSize), 1); if (state.pageNo < totalPages) { state.pageNo++; loadPage(); } });
+    loadPage();
+</script>
+</body>
+</html>

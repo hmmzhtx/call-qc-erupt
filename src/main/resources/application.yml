@@ -1,0 +1,145 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/plain,text/css,application/javascript
+
+spring:
+  application:
+    name: call-qc-erupt
+
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/call_qc?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:change-me}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  thymeleaf:
+    cache: false
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+erupt-app:
+  # 是否开启页面水印
+  water-mark: true
+  # 登录失败多少次后显示验证码
+  verify-code-count: 2
+  # 是否开启登录密码加密传输
+  pwd-transfer-encrypt: true
+  # 是否允许在前端重置密码
+  reset-pwd: true
+  # 当前项目优先保留中文和英文即可
+  locales:
+    - "zh-CN"
+    - "en-US"
+
+erupt:
+  # 是否开启 CSRF 防御
+  csrf-inspect: true
+  # 当前项目暂不启用 Redis Session
+  redis-session: false
+  # Redis Session 自动续期开关，只有 redis-session=true 时才有意义
+  redis-session-refresh: false
+  # Erupt 附件上传目录
+  upload-path: ./data/erupt-attachment
+  # 是否保留上传文件原始名称
+  keep-upload-file-name: false
+  # 初始化方式，FILE 更适合部署环境
+  init-method-enum: file
+  # 默认语言
+  default-locales: zh-CN
+  # 当前项目未集成 erupt-job，先关闭
+  job:
+    enable: false
+  # 开启日志采集，便于排查问题
+  log-track: true
+  # 日志采集缓存行数
+  log-track-cache-size: 1000
+  security:
+    # 记录操作日志
+    record-operate-log: true
+  upms:
+    # 登录有效时长，单位分钟
+    expire-time-by-login: 60
+    # 严格校验角色菜单合法性
+    strict-role-menu-legal: true
+    # 初始化默认管理员账号
+    default-account: erupt
+    # 初始化默认管理员密码
+    default-password: ${ERUPT_DEFAULT_PASSWORD:change-me}
+
+qc:
+  # 转写完成后自动执行基础质检
+  auto-execute-after-transcription: true
+
+  async:
+    # 是否启用异步转写任务
+    enabled: true
+    # 导入通话且存在录音地址时自动入队
+    auto-submit-after-import: true
+    # 上传录音文件后自动入队
+    auto-submit-after-recording-upload: true
+    # 本地录音文件上传目录
+    recording-upload-dir: ./temp/audio
+    # 异步线程池核心线程数
+    executor-core-pool-size: 2
+    # 异步线程池最大线程数
+    executor-max-pool-size: 4
+    # 异步线程池队列长度
+    executor-queue-capacity: 100
+    # 队列调度轮询间隔（毫秒）
+    dispatch-fixed-delay-ms: 2000
+    # 单次取队列任务数
+    queue-batch-size: 5
+    # 同时运行的最大转写任务数
+    max-concurrent-running: 2
+    # 最大重试次数
+    max-retry-count: 3
+    # 重试等待秒数
+    retry-delay-seconds: 30
+
+  transcription:
+    # 是否启用本地 ASR 服务
+    enabled: true
+    # 本地免费 ASR 服务根地址
+    base-url: http://127.0.0.1:18081
+    # 转写接口路径
+    transcribe-path: /transcribe
+    # 直接传本地文件路径的转写接口
+    transcribe-path-by-local-file: /transcribe_path
+    # 健康检查接口路径
+    health-path: /health
+    # 临时音频目录
+    temp-dir: ./temp/audio
+    # 连接超时时间（秒）
+    connect-timeout-seconds: 30
+    # 读取超时时间（秒）
+    read-timeout-seconds: 600
+    # 常用热词
+    hotword: 订单号 客服 工单 售后 退款 发票 配送
+    # 默认说话人角色
+    default-speaker-role: UNKNOWN
+    # 角色映射模式
+    speaker-role-mode: raw
+
+logging:
+  level:
+    root: info
+    com.oai.callqc: info

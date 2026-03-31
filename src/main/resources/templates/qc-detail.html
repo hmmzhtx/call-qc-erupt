@@ -1,0 +1,853 @@
+<!--
+  源码中文讲解：质检详情工作台页面
+  - 这是 1.0 版本最重要的前端页面，用于展示一通电话的完整质检视图。
+  - 页面包含：基础信息、状态时间线、录音播放、评分概览、转写分段、规则命中、人工复核。
+  - 页面中的按钮会调用后端接口，实现转写、质检、复核等操作。
+-->
+
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>质检详情页</title>
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --card: #ffffff;
+            --line: #e5e7eb;
+            --text: #111827;
+            --muted: #6b7280;
+            --primary: #2563eb;
+            --primary-soft: #dbeafe;
+            --success: #059669;
+            --success-soft: #d1fae5;
+            --warn: #d97706;
+            --warn-soft: #fef3c7;
+            --danger: #dc2626;
+            --danger-soft: #fee2e2;
+            --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        .page {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            background: linear-gradient(135deg, #eff6ff, #ffffff);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            margin-bottom: 18px;
+        }
+        .hero-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+        }
+        .sub-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .btn {
+            border: none;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: .2s ease;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--line); }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-link { background: transparent; color: var(--primary); padding: 0; }
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .badge-primary { background: var(--primary-soft); color: var(--primary); }
+        .badge-success { background: var(--success-soft); color: var(--success); }
+        .badge-warn { background: var(--warn-soft); color: var(--warn); }
+        .badge-danger { background: var(--danger-soft); color: var(--danger); }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+        .stat-card, .card {
+            background: var(--card);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+        }
+        .stat-card { padding: 18px; }
+        .stat-label { color: var(--muted); font-size: 13px; }
+        .stat-value { margin-top: 8px; font-size: 28px; font-weight: 700; }
+        .stat-sub { margin-top: 6px; color: var(--muted); font-size: 12px; }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 360px minmax(0, 1fr);
+            gap: 18px;
+            align-items: start;
+        }
+        .flow-stack {
+            display: grid;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+        .card { padding: 20px; margin-bottom: 18px; }
+        .section-title {
+            margin: 0 0 16px 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .meta-item {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 72px;
+        }
+        .meta-item .label { color: var(--muted); font-size: 12px; }
+        .meta-item .value { margin-top: 6px; font-size: 14px; font-weight: 600; word-break: break-word; }
+        .timeline {
+            display: grid;
+            gap: 12px;
+        }
+        .timeline.horizontal {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 14px;
+        }
+        .timeline-item {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            position: relative;
+        }
+        .timeline.horizontal .timeline-item {
+            background: #f8fafc;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 14px;
+            min-height: 92px;
+        }
+        .timeline-item:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            left: 10px;
+            top: 24px;
+            width: 2px;
+            bottom: -12px;
+            background: var(--line);
+        }
+        .timeline.horizontal .timeline-item::after {
+            display: none;
+        }
+        .timeline-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            flex: 0 0 auto;
+            margin-top: 2px;
+        }
+        .timeline-item.done .timeline-dot { background: var(--success); }
+        .timeline-item.active .timeline-dot { background: var(--primary); }
+        .timeline-content h4 { margin: 0; font-size: 14px; }
+        .timeline-content p { margin: 4px 0 0 0; color: var(--muted); font-size: 13px; }
+        .audio-box { display: grid; gap: 12px; }
+        audio { width: 100%; }
+        .score-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .score-item {
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 14px;
+        }
+        .score-item .label { color: var(--muted); font-size: 12px; }
+        .score-item .value { margin-top: 6px; font-size: 22px; font-weight: 700; }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .input, .select, .textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 10px 12px;
+            font-size: 14px;
+            background: #fff;
+        }
+        .textarea { min-height: 96px; resize: vertical; }
+        .toolbar .input { max-width: 220px; }
+        .toolbar .select { max-width: 160px; }
+        .list { display: grid; gap: 12px; }
+        .transcript-item, .hit-item, .review-item {
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 14px;
+            background: #fff;
+        }
+        .transcript-head, .hit-head, .review-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .speaker-agent { color: var(--primary); font-weight: 700; }
+        .speaker-customer { color: var(--danger); font-weight: 700; }
+        .speaker-unknown { color: var(--muted); font-weight: 700; }
+        .mini-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .mini-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .severity-LOW { border-left: 4px solid var(--warn); }
+        .severity-MEDIUM { border-left: 4px solid #f59e0b; }
+        .severity-HIGH { border-left: 4px solid var(--danger); }
+        .muted { color: var(--muted); }
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 24px;
+            border: 1px dashed var(--line);
+            border-radius: 14px;
+            background: #fff;
+        }
+        .split-grid {
+            display: grid;
+            grid-template-columns: 1.1fr .9fr;
+            gap: 18px;
+        }
+        .review-form {
+            display: grid;
+            gap: 12px;
+        }
+        .review-form-inline {
+            display: grid;
+            grid-template-columns: 180px 180px 180px 180px minmax(260px, 1fr) auto;
+            gap: 12px;
+            align-items: start;
+        }
+        .review-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .status-chip {
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-chip.low { background: var(--success-soft); color: var(--success); }
+        .status-chip.medium { background: var(--warn-soft); color: var(--warn); }
+        .status-chip.high { background: var(--danger-soft); color: var(--danger); }
+        .footer-note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+        @media (max-width: 1200px) {
+            .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .main-grid, .split-grid, .review-form-inline { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 760px) {
+            .page { padding: 16px; }
+            .hero { flex-direction: column; }
+            .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .meta-grid, .score-grid, .review-form-grid, .review-form-inline { grid-template-columns: 1fr; }
+            .timeline.horizontal { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="hero">
+        <div>
+            <h1 class="hero-title">质检详情工作台</h1>
+            <div class="sub-line">
+                <span>通话ID：<strong id="callIdText"></strong></span>
+                <span>坐席：<strong id="agentNameText"></strong></span>
+                <span>业务线：<strong id="businessLineText"></strong></span>
+                <span>最近处理：<strong id="lastProcessTimeText"></strong></span>
+            </div>
+            <div class="badge-row" id="badgeRow"></div>
+            <div class="footer-note" id="autoRefreshHint"></div>
+        </div>
+        <div class="hero-actions">
+            <button class="btn btn-primary" id="btnAsyncTranscribe">异步转写</button>
+            <button class="btn btn-success" id="btnExecuteQc">执行基础质检</button>
+            <button class="btn btn-secondary" id="btnCopyTranscript">复制全文</button>
+            <button class="btn btn-secondary" id="btnRefresh">刷新页面</button>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card"><div class="stat-label">总分</div><div class="stat-value" id="statTotalScore">-</div><div class="stat-sub" id="statRiskLevel">暂无质检结果</div></div>
+        <div class="stat-card"><div class="stat-label">转写分段</div><div class="stat-value" id="statSegmentCount">0</div><div class="stat-sub">已落库文本段数</div></div>
+        <div class="stat-card"><div class="stat-label">规则命中</div><div class="stat-value" id="statHitCount">0</div><div class="stat-sub">基础规则触发次数</div></div>
+        <div class="stat-card"><div class="stat-label">高危命中</div><div class="stat-value" id="statHighHitCount">0</div><div class="stat-sub">需要优先复核</div></div>
+        <div class="stat-card"><div class="stat-label">复核次数</div><div class="stat-value" id="statReviewCount">0</div><div class="stat-sub">人工复核记录</div></div>
+        <div class="stat-card"><div class="stat-label">通话时长</div><div class="stat-value" id="statDuration">0s</div><div class="stat-sub">录音/转写时间轴</div></div>
+    </div>
+
+    <div class="flow-stack">
+        <div class="card">
+            <h3 class="section-title">处理进度</h3>
+            <div class="timeline horizontal" id="processTimeline"></div>
+        </div>
+
+        <div class="card">
+            <h3 class="section-title">人工复核</h3>
+            <form class="review-form" id="reviewForm">
+                <div class="review-form-inline">
+                    <input class="input" name="reviewerId" placeholder="复核人工号，如 QA1001">
+                    <input class="input" name="reviewerName" placeholder="复核人姓名，如 质检专员A">
+                    <select class="select" name="reviewResult">
+                        <option value="">选择复核结果</option>
+                        <option value="CONFIRMED">确认命中</option>
+                        <option value="ADJUSTED">调整分数</option>
+                        <option value="FALSE_POSITIVE">误判</option>
+                    </select>
+                    <input class="input" type="number" name="adjustedScore" min="0" max="100" placeholder="调整后分数（可选）">
+                    <textarea class="textarea" name="reviewComment" placeholder="填写复核说明，例如：该命中为客户复述，不应扣分"></textarea>
+                    <div>
+                        <button type="submit" class="btn btn-primary">提交复核</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="main-grid">
+        <div>
+            <div class="card">
+                <h3 class="section-title">播放与基础信息</h3>
+                <div class="audio-box">
+                    <audio id="audioPlayer" controls preload="metadata"></audio>
+                    <div class="footer-note" id="audioTip">音频优先通过后端流式接口播放。</div>
+                </div>
+                <div class="meta-grid" style="margin-top: 16px;" id="metaGrid"></div>
+            </div>
+        </div>
+
+        <div>
+            <div class="card">
+                <h3 class="section-title">评分概览</h3>
+                <div id="summaryText" class="muted">暂无摘要</div>
+                <div class="score-grid">
+                    <div class="score-item"><div class="label">合规分</div><div class="value" id="scoreCompliance">-</div></div>
+                    <div class="score-item"><div class="label">服务分</div><div class="value" id="scoreService">-</div></div>
+                    <div class="score-item"><div class="label">流程分</div><div class="value" id="scoreProcess">-</div></div>
+                    <div class="score-item"><div class="label">业务分</div><div class="value" id="scoreBusiness">-</div></div>
+                </div>
+            </div>
+
+            <div class="split-grid">
+                <div class="card">
+                    <h3 class="section-title">转写内容</h3>
+                    <div class="toolbar">
+                        <input class="input" id="transcriptKeyword" placeholder="搜索转写关键词">
+                        <select class="select" id="speakerFilter">
+                            <option value="ALL">全部角色</option>
+                            <option value="AGENT">仅坐席</option>
+                            <option value="CUSTOMER">仅客户</option>
+                            <option value="UNKNOWN">仅未知</option>
+                        </select>
+                        <button class="btn btn-secondary" id="btnFilterTranscript">筛选</button>
+                    </div>
+                    <div class="list" id="transcriptList"></div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h3 class="section-title">规则命中</h3>
+                        <div class="list" id="hitList"></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="section-title">复核记录</h3>
+                        <div class="list" id="reviewList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    const detail = JSON.parse(/*[[${detailJson}]]*/ '{}');
+</script>
+<script>
+    const callRecord = detail.callRecord || {};
+    const qcResult = detail.qcResult || {};
+    const transcripts = detail.transcripts || [];
+    const hitDetails = detail.hitDetails || [];
+    const reviews = detail.reviews || [];
+    const audioPlayer = document.getElementById('audioPlayer');
+    const AUTO_REFRESH_INTERVAL_MS = 5000;
+    let autoRefreshTimer = null;
+    let detailSnapshot = '';
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function formatDateTime(value) {
+        if (!value) return '-';
+        return String(value).replace('T', ' ');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function formatDurationMs(ms) {
+        if (!ms) return '0s';
+        const sec = Math.floor(ms / 1000);
+        const min = Math.floor(sec / 60);
+        const remain = sec % 60;
+        if (min <= 0) return `${remain}s`;
+        return `${min}m ${remain}s`;
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function formatMs(ms) {
+        if (ms == null) return '0ms';
+        return `${(ms / 1000).toFixed(1)}s`;
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function statusBadgeClass(riskLevel) {
+        const val = (riskLevel || '').toUpperCase();
+        if (val === 'HIGH') return 'badge-danger';
+        if (val === 'MEDIUM') return 'badge-warn';
+        return 'badge-success';
+    }
+
+    // 功能说明：根据规则结果或分数计算风险等级。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function riskChipClass(riskLevel) {
+        const val = (riskLevel || '').toLowerCase();
+        if (val === 'high') return 'status-chip high';
+        if (val === 'medium') return 'status-chip medium';
+        return 'status-chip low';
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function speakerClass(role) {
+        const value = (role || 'UNKNOWN').toUpperCase();
+        if (value === 'AGENT') return 'speaker-agent';
+        if (value === 'CUSTOMER') return 'speaker-customer';
+        return 'speaker-unknown';
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderMetaGrid() {
+        const metaItems = [
+            ['处理状态', callRecord.processStatus || '-'],
+            ['处理说明', callRecord.processMessage || '-'],
+            ['坐席', `${callRecord.agentName || '-'} / ${callRecord.agentId || '-'}`],
+            ['客户', `${callRecord.customerPhone || '-'} / ${callRecord.customerId || '-'}`],
+            ['业务线', callRecord.businessLine || '-'],
+            ['技能组', callRecord.skillGroup || '-'],
+            ['通话类型', callRecord.callType || '-'],
+            ['录音地址', callRecord.recordingUrl || '-'],
+            ['开始时间', formatDateTime(callRecord.startTime)],
+            ['结束时间', formatDateTime(callRecord.endTime)]
+        ];
+        document.getElementById('metaGrid').innerHTML = metaItems.map(([label, value]) => `
+            <div class="meta-item">
+                <div class="label">${escapeHtml(label)}</div>
+                <div class="value">${escapeHtml(value)}</div>
+            </div>
+        `).join('');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderHeader() {
+        document.getElementById('callIdText').textContent = callRecord.callId || '-';
+        document.getElementById('agentNameText').textContent = callRecord.agentName || '-';
+        document.getElementById('businessLineText').textContent = callRecord.businessLine || '-';
+        document.getElementById('lastProcessTimeText').textContent = formatDateTime(callRecord.lastProcessTime);
+        const badges = [
+            { text: `处理状态：${callRecord.processStatus || '-'}`, cls: 'badge-primary' },
+            { text: `风险等级：${qcResult.riskLevel || '-'}`, cls: statusBadgeClass(qcResult.riskLevel) },
+            { text: `需复核：${qcResult.needManualReview ? '是' : '否'}`, cls: qcResult.needManualReview ? 'badge-danger' : 'badge-success' },
+            { text: `转写分段：${detail.transcriptSegmentCount || 0}`, cls: 'badge-primary' }
+        ];
+        document.getElementById('badgeRow').innerHTML = badges.map(item => `<span class="badge ${item.cls}">${escapeHtml(item.text)}</span>`).join('');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderStats() {
+        document.getElementById('statTotalScore').textContent = qcResult.totalScore ?? '-';
+        document.getElementById('statRiskLevel').innerHTML = `<span class="${riskChipClass(qcResult.riskLevel)}">${escapeHtml(qcResult.riskLevel || '无')}</span>`;
+        document.getElementById('statSegmentCount').textContent = detail.transcriptSegmentCount ?? 0;
+        document.getElementById('statHitCount').textContent = detail.hitCount ?? 0;
+        document.getElementById('statHighHitCount').textContent = detail.highSeverityHitCount ?? 0;
+        document.getElementById('statReviewCount').textContent = detail.reviewCount ?? 0;
+        document.getElementById('statDuration').textContent = formatDurationMs(detail.transcriptDurationMs || (callRecord.durationSeconds || 0) * 1000);
+
+        document.getElementById('summaryText').textContent = qcResult.summaryText || '当前暂无质检摘要';
+        document.getElementById('scoreCompliance').textContent = qcResult.complianceScore ?? '-';
+        document.getElementById('scoreService').textContent = qcResult.serviceScore ?? '-';
+        document.getElementById('scoreProcess').textContent = qcResult.processScore ?? '-';
+        document.getElementById('scoreBusiness').textContent = qcResult.businessScore ?? '-';
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderTimeline() {
+        const current = (callRecord.processStatus || '').toUpperCase();
+        const stages = [
+            ['IMPORTED', '通话导入', '通话元数据已进入系统'],
+            ['RECORDING_UPLOADED', '录音上传', '录音文件已上传或更新'],
+            ['TRANSCRIBE_PENDING', '等待转写', '异步任务已排队'],
+            ['TRANSCRIBING', '转写处理中', '本地 ASR 正在处理录音'],
+            ['TRANSCRIBED', '转写完成', '文本分段已落库'],
+            ['QC_DONE', '质检完成', '基础规则质检已完成'],
+            ['REVIEWED', '人工复核', '复核结果已回写']
+        ];
+        const currentIndex = Math.max(stages.findIndex(item => item[0] === current), 0);
+        document.getElementById('processTimeline').innerHTML = stages.map((item, index) => {
+            const done = current === 'TRANSCRIBE_FAILED' ? index < 4 : index < currentIndex;
+            const active = item[0] === current;
+            const cls = done ? 'timeline-item done' : (active ? 'timeline-item active' : 'timeline-item');
+            return `
+                <div class="${cls}">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <h4>${escapeHtml(item[1])}</h4>
+                        <p>${escapeHtml(item[2])}</p>
+                    </div>
+                </div>`;
+        }).join('') + (current === 'TRANSCRIBE_FAILED' ? `
+            <div class="timeline-item active">
+                <div class="timeline-dot" style="background: var(--danger)"></div>
+                <div class="timeline-content">
+                    <h4>转写失败</h4>
+                    <p>${escapeHtml(callRecord.processMessage || '请检查本地 ASR 服务与录音文件')}</p>
+                </div>
+            </div>` : '');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderTranscripts() {
+        const keyword = (document.getElementById('transcriptKeyword').value || '').trim().toLowerCase();
+        const speaker = document.getElementById('speakerFilter').value || 'ALL';
+        const list = transcripts.filter(item => {
+            const text = (item.transcriptText || '').toLowerCase();
+            const role = (item.speakerRole || 'UNKNOWN').toUpperCase();
+            const matchKeyword = !keyword || text.includes(keyword);
+            const matchSpeaker = speaker === 'ALL' || role === speaker;
+            return matchKeyword && matchSpeaker;
+        });
+        if (!list.length) {
+            document.getElementById('transcriptList').innerHTML = '<div class="empty">没有匹配到转写内容</div>';
+            return;
+        }
+        document.getElementById('transcriptList').innerHTML = list.map(item => `
+            <div class="transcript-item">
+                <div class="transcript-head">
+                    <div>
+                        <span class="${speakerClass(item.speakerRole)}">${escapeHtml(item.speakerRole || 'UNKNOWN')}</span>
+                        <span class="muted"> · 第 ${escapeHtml(item.segmentIndex ?? '-')} 段 · ${escapeHtml(formatMs(item.startMs))} - ${escapeHtml(formatMs(item.endMs))}</span>
+                    </div>
+                    <button class="mini-btn" data-seek="${item.startMs || 0}">跳转播放</button>
+                </div>
+                <div>${escapeHtml(item.transcriptText || '')}</div>
+            </div>
+        `).join('');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderHits() {
+        if (!hitDetails.length) {
+            document.getElementById('hitList').innerHTML = '<div class="empty">当前未命中基础规则</div>';
+            return;
+        }
+        document.getElementById('hitList').innerHTML = hitDetails.map(item => `
+            <div class="hit-item severity-${escapeHtml(item.severity || 'LOW')}">
+                <div class="hit-head">
+                    <div>
+                        <strong>${escapeHtml(item.ruleName || '-')}</strong>
+                        <span class="muted"> · ${escapeHtml(item.ruleCode || '-')}</span>
+                    </div>
+                    <div>
+                        <span class="status-chip ${(item.severity || '').toLowerCase() === 'high' ? 'high' : ((item.severity || '').toLowerCase() === 'medium' ? 'medium' : 'low')}">${escapeHtml(item.severity || 'LOW')}</span>
+                        <button class="mini-btn" data-seek="${item.startMs || 0}">查看证据</button>
+                    </div>
+                </div>
+                <div class="muted">扣分：${escapeHtml(item.deductScore ?? 0)} · ${escapeHtml(formatMs(item.startMs))} - ${escapeHtml(formatMs(item.endMs))}</div>
+                <div style="margin-top: 8px;">${escapeHtml(item.evidenceText || '无证据文本')}</div>
+            </div>
+        `).join('');
+    }
+
+    // 功能说明：处理人工复核结果，并回写最终质检状态。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function renderReviews() {
+        if (!reviews.length) {
+            document.getElementById('reviewList').innerHTML = '<div class="empty">暂无人工复核记录</div>';
+            return;
+        }
+        document.getElementById('reviewList').innerHTML = reviews.map(item => `
+            <div class="review-item">
+                <div class="review-head">
+                    <div>
+                        <strong>${escapeHtml(item.reviewerName || '-')}</strong>
+                        <span class="muted"> / ${escapeHtml(item.reviewerId || '-')}</span>
+                    </div>
+                    <span class="status-chip">${escapeHtml(item.reviewResult || '-')}</span>
+                </div>
+                <div class="muted">复核时间：${escapeHtml(formatDateTime(item.reviewedAt))}</div>
+                <div class="muted">调整分数：${escapeHtml(item.adjustedScore ?? '-')}</div>
+                <div style="margin-top: 8px;">${escapeHtml(item.reviewComment || '')}</div>
+            </div>
+        `).join('');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function bindAudio() {
+        audioPlayer.src = `/api/v1/calls/${encodeURIComponent(callRecord.callId)}/recording/content`;
+        document.addEventListener('click', event => {
+            const seekMs = event.target?.dataset?.seek;
+            if (!seekMs) return;
+            audioPlayer.currentTime = Number(seekMs) / 1000;
+            audioPlayer.play().catch(() => {});
+        });
+    }
+
+
+    // 功能说明：构造一个轻量级快照，用于判断后端处理状态是否发生变化。
+    // 页面用途：当页面处于“转写处理中/等待质检”等状态时，前端会定时拉取详情接口；若快照变化则自动刷新页面。
+    function buildDetailSnapshot(payload) {
+        const record = payload.callRecord || {};
+        const result = payload.qcResult || {};
+        return JSON.stringify({
+            processStatus: record.processStatus || '',
+            processMessage: record.processMessage || '',
+            lastProcessTime: record.lastProcessTime || '',
+            transcriptSegmentCount: payload.transcriptSegmentCount || 0,
+            hitCount: payload.hitCount || 0,
+            reviewCount: payload.reviewCount || 0,
+            totalScore: result.totalScore ?? null,
+            riskLevel: result.riskLevel || ''
+        });
+    }
+
+    // 功能说明：判断当前页面是否需要继续自动刷新监听。
+    // 页面用途：只有在异步处理中时才轮询，避免正常完成状态下持续请求接口。
+    function shouldAutoRefresh(payload) {
+        const status = String(payload?.callRecord?.processStatus || '').toUpperCase();
+        return ['IMPORTED', 'RECORDING_UPLOADED', 'TRANSCRIBE_PENDING', 'TRANSCRIBING', 'TRANSCRIBED'].includes(status);
+    }
+
+    // 功能说明：更新页面上的自动刷新提示文案。
+    // 页面用途：告诉用户系统正在后台处理，以及页面会自动同步最新结果。
+    function updateAutoRefreshHint(payload = detail) {
+        const hintEl = document.getElementById('autoRefreshHint');
+        if (!hintEl) return;
+        if (shouldAutoRefresh(payload)) {
+            hintEl.textContent = '检测到后台仍在处理，页面会每 5 秒自动检查一次最新状态；处理完成后会自动刷新。';
+        } else {
+            hintEl.textContent = '当前状态已稳定，无需手动刷新页面。';
+        }
+    }
+
+    // 功能说明：停止自动刷新定时器。
+    // 页面用途：在处理完成或页面销毁时，释放轮询任务，避免无意义请求。
+    function stopAutoRefreshMonitor() {
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+    }
+
+    // 功能说明：向后端重新拉取最新质检详情。
+    // 页面用途：当检测到处理状态、转写数量、命中数量或分数变化时，自动刷新整个页面，避免用户手动刷新。
+    async function checkLatestDetail() {
+        try {
+            const response = await fetch(`/api/v1/qc/${encodeURIComponent(callRecord.callId)}/detail`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.code !== 0 || !result.data) {
+                return;
+            }
+            const latest = result.data;
+            const latestSnapshot = buildDetailSnapshot(latest);
+            updateAutoRefreshHint(latest);
+            if (latestSnapshot !== detailSnapshot) {
+                location.reload();
+                return;
+            }
+            if (!shouldAutoRefresh(latest)) {
+                stopAutoRefreshMonitor();
+            }
+        } catch (e) {
+            console.warn('自动刷新检查失败', e);
+        }
+    }
+
+    // 功能说明：启动自动刷新监听。
+    // 页面用途：详情页在“转写处理中”或“等待质检完成”时自动轮询，避免页面一直停留在旧状态。
+    function startAutoRefreshMonitor() {
+        detailSnapshot = buildDetailSnapshot(detail);
+        updateAutoRefreshHint(detail);
+        if (!shouldAutoRefresh(detail)) {
+            stopAutoRefreshMonitor();
+            return;
+        }
+        stopAutoRefreshMonitor();
+        autoRefreshTimer = setInterval(checkLatestDetail, AUTO_REFRESH_INTERVAL_MS);
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    async function postJson(url, body) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body ? JSON.stringify(body) : undefined
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.code !== 0) {
+            throw new Error(result.message || '请求失败');
+        }
+        return result;
+    }
+
+    // 功能说明：处理人工复核结果，并回写最终质检状态。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    async function submitReview(event) {
+        event.preventDefault();
+        const form = new FormData(event.target);
+        const body = Object.fromEntries(form.entries());
+        if (body.adjustedScore === '') delete body.adjustedScore; else body.adjustedScore = Number(body.adjustedScore);
+        await postJson(`/api/v1/qc/${encodeURIComponent(callRecord.callId)}/review`, body);
+        alert('复核提交成功');
+        location.reload();
+    }
+
+    // 功能说明：发起录音转写处理，把音频内容转换成可用的文本数据。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    async function triggerAsyncTranscribe() {
+        await postJson(`/api/v1/calls/${encodeURIComponent(callRecord.callId)}/transcribe/async`);
+        alert('已加入异步转写队列，页面将自动跟进处理状态');
+        setTimeout(() => location.reload(), 800);
+    }
+
+    // 功能说明：执行当前业务场景的核心处理逻辑。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    async function executeQc() {
+        await postJson(`/api/v1/qc/${encodeURIComponent(callRecord.callId)}/execute`);
+        alert('基础质检执行成功，页面将自动刷新结果');
+        setTimeout(() => location.reload(), 500);
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    async function copyTranscript() {
+        await navigator.clipboard.writeText(detail.fullTranscriptText || '');
+        alert('转写全文已复制');
+    }
+
+    // 功能说明：封装当前类中的一个业务步骤，供上层流程按顺序调用。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function bindActions() {
+        document.getElementById('btnFilterTranscript').addEventListener('click', renderTranscripts);
+        document.getElementById('reviewForm').addEventListener('submit', submitReview);
+        document.getElementById('btnAsyncTranscribe').addEventListener('click', triggerAsyncTranscribe);
+        document.getElementById('btnExecuteQc').addEventListener('click', executeQc);
+        document.getElementById('btnCopyTranscript').addEventListener('click', copyTranscript);
+        document.getElementById('btnRefresh').addEventListener('click', () => location.reload());
+    }
+
+    // 功能说明：执行初始化逻辑，准备系统运行所需的基础数据或环境。
+    // 页面用途：该函数服务于质检详情页的前端展示或交互逻辑。
+    function init() {
+        renderHeader();
+        renderStats();
+        renderMetaGrid();
+        renderTimeline();
+        renderTranscripts();
+        renderHits();
+        renderReviews();
+        bindAudio();
+        bindActions();
+        startAutoRefreshMonitor();
+    }
+
+    window.addEventListener('beforeunload', stopAutoRefreshMonitor);
+
+    init();
+</script>
+</body>
+</html>

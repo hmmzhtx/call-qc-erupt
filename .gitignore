@@ -1,0 +1,23 @@
+# build
+/target/
+
+# ide
+/.idea/
+*.iml
+
+# runtime/data
+/temp/
+/data/
+/.erupt/
+*.mv.db
+*.trace.db
+
+# env/logs
+.env
+.env.*
+*.log
+
+# python venv (tools/asr)
+/tools/asr/.venv/
+/tools/asr/__pycache__/
+/tools/asr/*.pyc
